@@ -4,7 +4,34 @@ from datetime import date, timedelta
 from typing import List, Dict, Any
 import requests
 import time
-import re 
+import re
+
+# 飞书应用配置
+app_id = 'cli_a9d37911a7b9dccb'
+app_secret = 'wp0YpSocNThU3jj78aPGrnSOO1Txbnag'
+spreadsheet_token = 'KD2aw9YJMiDMsTkP53CcRI2hnBh'
+
+
+def get_token():
+    """获取飞书 API 访问令牌"""
+    response = requests.post(
+        url='https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
+        data={
+            "app_id": app_id,
+            "app_secret": app_secret
+        })
+    if response.status_code == 200:
+        data = response.json()
+        if data["code"] == 0:
+            print("成功获取token")
+            return data["tenant_access_token"]
+        else:
+            print("获取租户访问令牌失败，错误码：", data["code"])
+            print("错误信息：", data["msg"])
+            return None
+    else:
+        print("Error:", response.status_code)
+        return None
 
 
 def clean_illegal_chars(df: pd.DataFrame) -> pd.DataFrame:
@@ -135,16 +162,20 @@ def append_to_excel(plate_df: pd.DataFrame,
 
 # ---------- 写入飞书文档 ----------
 def append_to_feishu(nums_df: pd.DataFrame,
-                    spreadsheet_token: str = 'KD2aw9YJMiDMsTkP53CcRI2hnBh',
+                    spreadsheet_token: str = spreadsheet_token,
                     sheet_id: str = 'b93e41',
-                    access_token: str = 't-g104149H6IRA4NO57HT4DXF5GRBSMZLUGCPL45PO'):
+                    access_token: str = None):
     """
     将大盘统计数据写入飞书文档
     1. 读取现有数据，找到第一个 null 行
     2. 在该行写入新数据
     """
+    if access_token is None:
+        access_token = get_token()
+        if access_token is None:
+            raise Exception("无法获取飞书访问令牌")
     # 1. 读取现有数据
-    url_read = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!A1:A1000?valueRenderOption=ToString&dateTimeRenderOption=FormattedString'
+    url_read = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!A1:A200?valueRenderOption=ToString&dateTimeRenderOption=FormattedString'
     headers = {'Authorization': f'Bearer {access_token}'}
     r = requests.get(url_read, headers=headers)
     r.raise_for_status()
@@ -187,13 +218,17 @@ def append_to_feishu(nums_df: pd.DataFrame,
 
 # ---------- 写入飞书股票数据 ----------
 def append_stock_to_feishu(stock_df: pd.DataFrame,
-                           spreadsheet_token: str = 'KD2aw9YJMiDMsTkP53CcRI2hnBh',
+                           spreadsheet_token: str = spreadsheet_token,
                            sheet_id: str = 'lWz5Xh',
-                           access_token: str = 't-g104149H6IRA4NO57HT4DXF5GRBSMZLUGCPL45PO'):
+                           access_token: str = None):
     """
     将股票数据写入飞书文档
     列：日期、板块代码、板块名称、股票代码、股票简称、涨停原因、概念标签、流通市值、总市值、市盈率、涨停说明、连板天数
     """
+    if access_token is None:
+        access_token = get_token()
+        if access_token is None:
+            raise Exception("无法获取飞书访问令牌")
     # 1. 读取现有数据
     url_read = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!A1:A50000?valueRenderOption=ToString&dateTimeRenderOption=FormattedString'
     headers = {'Authorization': f'Bearer {access_token}'}
@@ -238,13 +273,17 @@ def append_stock_to_feishu(stock_df: pd.DataFrame,
 
 # ---------- 写入飞书板块数据 ----------
 def append_plate_to_feishu(plate_df: pd.DataFrame,
-                           spreadsheet_token: str = 'KD2aw9YJMiDMsTkP53CcRI2hnBh',
+                           spreadsheet_token: str = spreadsheet_token,
                            sheet_id: str = 'P5PpQI',
-                           access_token: str = 't-g104149H6IRA4NO57HT4DXF5GRBSMZLUGCPL45PO'):
+                           access_token: str = None):
     """
     将板块数据写入飞书文档
     列：日期、板块代码、板块名称、涨停数量
     """
+    if access_token is None:
+        access_token = get_token()
+        if access_token is None:
+            raise Exception("无法获取飞书访问令牌")
     # 1. 读取现有数据
     url_read = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!A1:A10000?valueRenderOption=ToString&dateTimeRenderOption=FormattedString'
     headers = {'Authorization': f'Bearer {access_token}'}
@@ -289,6 +328,12 @@ def append_plate_to_feishu(plate_df: pd.DataFrame,
 
 # ---------- 主循环 ----------
 if __name__ == '__main__':
+    # 获取飞书访问令牌
+    token = get_token()
+    if token is None:
+        print("无法获取飞书访问令牌，程序退出")
+        exit(1)
+
     # 1. 想跑哪些天（默认跑今天）
     start = date.today()
     end   = date.today()
@@ -304,9 +349,9 @@ if __name__ == '__main__':
         if res.get('list'):
             df_p, df_s, df_n = parse_to_df(res, day)
             append_to_excel(df_p, df_s, df_n)
-            append_to_feishu(df_n)  # 写入飞书大盘统计
-            append_stock_to_feishu(df_s)  # 写入飞书股票数据
-            append_plate_to_feishu(df_p)  # 写入飞书板块数据
+            append_to_feishu(df_n, access_token=token)  # 写入飞书大盘统计
+            append_stock_to_feishu(df_s, access_token=token)  # 写入飞书股票数据
+            append_plate_to_feishu(df_p, access_token=token)  # 写入飞书板块数据
         else:
             print(f'{day} 无数据')
         # except Exception as e:
