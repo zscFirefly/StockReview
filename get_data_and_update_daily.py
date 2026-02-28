@@ -755,10 +755,10 @@ if __name__ == '__main__':
         exit(1)
 
     # 1. 想跑哪些天（默认跑今天）
-    # start = date.today()
-    # end   = date.today()
-    start = date(2026, 2, day=27)
-    end   = date(2026, 2, 27)
+    start = date.today()
+    end   = date.today()
+    # start = date(2026, 2, day=27)
+    # end   = date(2026, 2, 27)
     date_list = [(start + timedelta(d)).strftime('%Y-%m-%d')
                  for d in range((end - start).days + 1)]
 

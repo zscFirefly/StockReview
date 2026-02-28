@@ -18,7 +18,11 @@
 数据同步到以下三个飞书表格：
 
 - **大盘统计** (sheet_id: `b93e41`)
-  - 列：日期、上涨家数、下跌家数、涨停、跌停、炸板率、昨日涨停表现
+  - H列：市场容量（`lastPoint`，去掉后4位）
+  - I列：热门板块（涨停数量>=4，排除"其他"和"ST板块"）
+  - J列：最高板（连板数数字）
+  - K列：涨停天梯
+  - 其他列：日期、上涨家数、下跌家数、涨停、跌停、炸板率、昨日涨停表现
 
 - **股票维度** (sheet_id: `lWz5Xh`)
   - 列：日期、板块代码、板块名称、股票代码、股票简称、涨停原因、概念标签、流通市值、总市值、市盈率、涨停说明、连板天数
@@ -62,11 +66,16 @@ end   = date.today()
 | 函数名 | 功能 |
 |--------|------|
 | `get_ztdt_data(day)` | 获取指定日期的涨停板数据 |
+| `get_market_capacity_kline()` | 获取市场容量K线数据（龙虎榜API） |
 | `parse_to_df(json_data, day)` | 解析JSON数据，转换为三个DataFrame（板块、股票、大盘统计） |
 | `append_to_excel()` | 追加数据到本地Excel文件 |
 | `append_to_feishu()` | 写入大盘统计数据到飞书 |
 | `append_stock_to_feishu()` | 写入股票数据到飞书 |
 | `append_plate_to_feishu()` | 写入板块数据到飞书 |
+| `update_market_capacity_to_feishu()` | 写入市场容量数据到飞书H列 |
+| `update_lianban_to_feishu()` | 写入最高板数据到飞书J列 |
+| `update_hot_plates_to_feishu()` | 写入热门板块数据到飞书I列 |
+| `format_hot_plates()` | 格式化热门板块字符串，排除"其他"和"ST板块" |
 
 ### 注意事项
 
