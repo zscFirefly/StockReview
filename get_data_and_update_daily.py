@@ -540,6 +540,101 @@ def update_lianban_to_feishu(date_str: str,
     print(f'>>> 已将涨停天梯写入 {sheet_id} 第K{target_row}行，最高板写入第J{target_row}行')
 
 
+# ---------- 获取市场容量K线数据 ----------
+def get_market_capacity_kline():
+    """获取当天市场容量K线数据"""
+    url = "https://apphis.longhuvip.com/w1/api/index.php"
+
+    headers = {
+        "Host": "apphis.longhuvip.com",
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        "Accept": "*/*",
+        "User-Agent": "lhb/5.23.1 (com.kaipanla.www; build:1; iOS 18.6.2) Alamofire/4.9.1",
+        "Accept-Language": "zh-Hans-CN;q=1.0"
+    }
+
+    data = {
+        "PhoneOSNew": "2",
+        "Token": "0",
+        "Type": "0",
+        "UserID": "0",
+        "VerSion": "5.23.0.1",
+        "a": "MarketCapacityKLine",
+        "apiv": "w44",
+        "c": "HisHomeDingPan"
+    }
+
+    response = requests.post(url, headers=headers, data=data)
+    response.raise_for_status()
+    return response.json()
+
+
+# ---------- 写入市场容量到飞书H列 ----------
+def update_market_capacity_to_feishu(date_str: str,
+                                      spreadsheet_token: str = spreadsheet_token,
+                                      sheet_id: str = 'b93e41',
+                                      access_token: str = None):
+    """
+    获取市场容量数据并写入飞书大盘统计表的H列
+    """
+    if access_token is None:
+        access_token = get_token()
+        if access_token is None:
+            raise Exception("无法获取飞书访问令牌")
+
+    # 获取市场容量数据
+    result = get_market_capacity_kline()
+
+    if 'info' not in result or not result['info']:
+        print('无市场容量数据')
+        return
+
+    # 查找对应日期的lastPoint
+    last_point = None
+    for item in result['info']:
+        if item['Date'] == date_str:
+            last_point = item['lastPoint'][:-4]  # 去掉后4位
+            break
+
+    if last_point is None:
+        print(f'未找到日期 {date_str} 对应的市场容量数据')
+        return
+
+    # 读取现有数据找到对应的行
+    url_read = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!A1:K200?valueRenderOption=ToString&dateTimeRenderOption=FormattedString'
+    headers = {'Authorization': f'Bearer {access_token}'}
+    r = requests.get(url_read, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+    print(data)
+    values = data['data']['valueRange']['values']
+
+    # 找到对应日期的行
+    target_row = None
+    for i in range(1, len(values)):
+        if values[i][0] == date_str:
+            target_row = i + 1
+            break
+
+    if target_row is None:
+        print(f'未找到日期 {date_str} 对应的行')
+        return
+
+    # 写入H列（市场容量）
+    range_str = f'{sheet_id}!H{target_row}:H{target_row}'
+    url_update = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values'
+    payload = {
+        "valueRange": {
+            "range": range_str,
+            "values": [[last_point]]
+        }
+    }
+    r = requests.put(url_update, headers=headers, json=payload)
+    r.raise_for_status()
+
+    print(f'>>> 已将市场容量写入 {sheet_id} 第H{target_row}行')
+
+
 # ---------- 写入热门板块到飞书I列 ----------
 def update_hot_plates_to_feishu(plate_df: pd.DataFrame,
                                  date_str: str,
@@ -660,10 +755,10 @@ if __name__ == '__main__':
         exit(1)
 
     # 1. 想跑哪些天（默认跑今天）
-    start = date.today()
-    end   = date.today()
-    # start = date(2025, 12, 31)
-    # end   = date(2025, 12, 31)
+    # start = date.today()
+    # end   = date.today()
+    start = date(2026, 2, day=27)
+    end   = date(2026, 2, 27)
     date_list = [(start + timedelta(d)).strftime('%Y-%m-%d')
                  for d in range((end - start).days + 1)]
 
@@ -677,6 +772,7 @@ if __name__ == '__main__':
             append_to_feishu(df_n, access_token=token)  # 写入飞书大盘统计
             append_stock_to_feishu(df_s, access_token=token)  # 写入飞书股票数据
             append_plate_to_feishu(df_p, access_token=token)  # 写入飞书板块数据
+            update_market_capacity_to_feishu(day, access_token=token)  # 写入市场容量到H列
             update_lianban_to_feishu(day, access_token=token)  # 写入涨停天梯到K列
             update_hot_plates_to_feishu(df_p, day, access_token=token)  # 写入热门板块到I列
         else:
